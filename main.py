@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from pathlib import Path
@@ -16,6 +17,7 @@ import aiohttp
 import astrbot.api.message_components as Comp
 from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, filter
+from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star
 from astrbot.api.web import error_response, json_response, request
 
@@ -23,6 +25,26 @@ PLUGIN_NAME = "astrbot_plugin_breeze_tts"
 DEFAULT_BASE = "https://api.breeze.blue"
 # 这些平台适配器不支持语音消息（QQ 官方机器人支持，会转成 silk 发送）
 NO_RECORD_PLATFORMS = {"dingtalk"}
+
+VOICE_HINT = (
+    "[语音能力] 当前会话已接入 Breeze TTS：你的回复会自动转成语音发给用户。\n"
+    "- 用户要求「念 / 朗读 / 朗诵 / 读一下 / 背诵 / 用语音说」某段内容时，"
+    "直接输出要朗读的完整原文（可以带标题），不要解释、不要加“好的 / 下面”之类的前缀，"
+    "也不要调用 say、python 等工具去生成音频。\n"
+    "- 回复会按原样朗读，请避免 Markdown、代码块、链接和表情符号。"
+)
+
+
+def _is_recitation(user_text: str) -> bool:
+    return bool(
+        re.search(r"念|朗读|朗诵|读一下|读给我|背诵|用语音|说出来", user_text or "")
+    )
+
+
+def _clean_for_speech(text: str) -> str:
+    cleaned = re.sub(r"[*_`>#]+", "", text)
+    cleaned = re.sub(r"\n{2,}", "\n", cleaned)
+    return cleaned.strip()
 
 
 def _extract_json(raw: str) -> dict:
@@ -183,6 +205,8 @@ class BreezeTTSPlugin(Star):
 
 同时给出发音指导 instructions：描述情绪、语速、重音和停顿，用中文，60 字以内，写得像导演给配音演员的提示。
 
+如果用户明确要求「念 / 朗读 / 朗诵 / 读一下」，script 必须逐字保留回复里的原文，不要改写、不要摘要、不要补充解释，只去掉 Markdown 符号。
+
 只输出一个 JSON 对象，不要代码块、不要解释：
 {"mode":"voice","instructions":"...","script":"..."}
 如果判断为文字，输出：{"mode":"text"}"""
@@ -242,7 +266,7 @@ class BreezeTTSPlugin(Star):
             "smartVoice": bool(self._cfg("smart_voice", True)),
             "stylePrompt": str(self._cfg("style_prompt", "") or ""),
             "speed": float(self._cfg("speed", 1.0) or 1.0),
-            "maxChars": int(self._cfg("max_chars", 200) or 200),
+            "maxChars": int(self._cfg("max_chars", 1000) or 1000),
             "keepText": bool(self._cfg("keep_text", False)),
             "language": str(self._cfg("language_code", "zh") or "zh"),
             "groupWhitelist": str(self._cfg("group_whitelist", "") or ""),
@@ -456,6 +480,15 @@ class BreezeTTSPlugin(Star):
         self._persist()
         return json_response({"voiceId": voice_id, "name": data.get("name", name)})
 
+    @filter.on_llm_request()
+    async def inject_voice_capability(
+        self, event: AstrMessageEvent, req: ProviderRequest
+    ):
+        """告诉模型它可以用语音说话，避免它去调用 say/python 生成音频。"""
+        if not bool(self._cfg("auto_voice", True)):
+            return
+        req.system_prompt = f"{req.system_prompt or ''}\n\n{VOICE_HINT}"
+
     # ---------- 语音回复 ----------
 
     def _allowed_here(self, event: AstrMessageEvent) -> bool:
@@ -510,12 +543,16 @@ class BreezeTTSPlugin(Star):
                     if str(decision.get("mode", "")).lower() != "voice":
                         logger.info("Breeze TTS: 判断为文字发送")
                         return
-                    script = str(decision.get("script") or "").strip() or text
+                    if _is_recitation(str(getattr(event, "message_str", "") or "")):
+                        # 用户要求朗诵/朗读时逐字保留原文，避免模型改写
+                        script = _clean_for_speech(text)
+                    else:
+                        script = str(decision.get("script") or "").strip() or text
                     instructions = str(decision.get("instructions") or "").strip()
                 except Exception as error:
                     logger.error("Breeze TTS: 语音导演失败，按语音处理: %s", error)
 
-            max_chars = int(self._cfg("max_chars", 200) or 200)
+            max_chars = int(self._cfg("max_chars", 1000) or 1000)
             if len(script) > max_chars:
                 logger.info(
                     "Breeze TTS: 跳过（%s 字超过上限 %s）", len(script), max_chars

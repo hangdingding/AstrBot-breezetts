@@ -45,8 +45,8 @@
   "max_chars": {
     "type": "int",
     "description": "单条字数上限",
-    "hint": "超过上限的回复保持文字发送，默认 200",
-    "default": 200
+    "hint": "超过上限的回复保持文字发送，默认 1000（Breeze 单次上限）",
+    "default": 1000
   },
   "keep_text": {
     "type": "bool",

@@ -42,6 +42,16 @@ git clone https://github.com/hangdingding/astrbot_plugin_breeze_tts
 
 模型返回 JSON，插件解析后调用 Breeze 合成。判断失败时降级为“直接转语音”。想退回“全部转语音”，把「智能判断」关掉即可。
 
+## 让模型知道"我能说话"
+
+插件会在每次请求时给系统提示词追加一段说明：
+
+> 当前会话已接入 Breeze TTS，回复会自动转成语音；用户要求「念/朗读/朗诵」时直接输出完整原文，不要调用 say、python 等工具去生成音频。
+
+这样模型不会再去尝试执行系统命令，也不会说"我发不出声音"。
+
+另外，用户明确要求朗诵时，插件会**逐字保留原文**（只去掉 Markdown 符号），不让语音导演改写或摘要。
+
 ## 配置
 
 插件配置页（由 `_conf_schema.json` 自动生成）：
@@ -55,7 +65,7 @@ git clone https://github.com/hangdingding/astrbot_plugin_breeze_tts
 | `style_prompt` | 附加发音风格（可选） |
 | `speed` | 语速 0.5–2.0 |
 | `language_code` | 语言，默认 `zh` |
-| `max_chars` | 单条上限，默认 200 字，超了保持文字 |
+| `max_chars` | 单条上限，默认 1000 字，超了保持文字 |
 | `keep_text` | 语音之外是否同时保留文字 |
 | `group_whitelist` | 只在这些群启用（逗号分隔，留空=全部） |
 | `base_url` | 默认 `https://api.breeze.blue` |
