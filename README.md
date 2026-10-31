@@ -25,6 +25,23 @@ git clone https://github.com/hangdingding/astrbot_plugin_breeze_tts
 
 要求 AstrBot `>= 4.11.0`。
 
+## 可视化页面
+
+插件详情页里有 **Breeze 语音设置** 视图（`views/panel`）：API Key、余额、全局语音回复开关、语速、音色搜索与试听、设计音色、福利与邀请入口都在这一页里，和 DSH 版面板一致。
+
+后端 API 由 `main.py` 的 `register_web_api` 提供（`/astrbot_plugin_breeze_tts/...`），页面通过 `window.AstrBotPluginView` bridge 调用，无需额外端口。
+
+## 智能判断（默认开）
+
+开启后，每条回复发出前会先问一次当前聊天模型（DeepSeek）：这条回复适合语音还是文字？
+
+- 闲聊、情绪、关心、角色扮演 → **语音**，模型同时给出：
+  - `script`：改写成适合朗读的口语稿（去掉 Markdown、表情、链接、列表）；
+  - `instructions`：发音指导（情绪、语速、重音），作为 Breeze 的 `instructions` 参数；
+- 代码、表格、链接、步骤教程、长文 → **文字**，保持原样。
+
+模型返回 JSON，插件解析后调用 Breeze 合成。判断失败时降级为“直接转语音”。想退回“全部转语音”，把「智能判断」关掉即可。
+
 ## 配置
 
 插件配置页（由 `_conf_schema.json` 自动生成）：
@@ -34,6 +51,8 @@ git clone https://github.com/hangdingding/astrbot_plugin_breeze_tts
 | `api_key` | Breeze API Key，`brz_` 开头（密文显示） |
 | `voice_id` | 音色 ID，`voc_` 开头 |
 | `auto_voice` | **全局语音回复，默认开** |
+| `smart_voice` | 智能判断文字/语音，默认开 |
+| `style_prompt` | 附加发音风格（可选） |
 | `speed` | 语速 0.5–2.0 |
 | `language_code` | 语言，默认 `zh` |
 | `max_chars` | 单条上限，默认 200 字，超了保持文字 |

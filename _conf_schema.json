@@ -18,6 +18,18 @@
     "hint": "开启后，所有 AI 文字回复会自动转成语音发送",
     "default": true
   },
+  "smart_voice": {
+    "type": "bool",
+    "description": "智能判断文字/语音",
+    "hint": "调用当前模型判断：适合语音才转语音，并生成发音指导",
+    "default": true
+  },
+  "style_prompt": {
+    "type": "text",
+    "description": "发音风格",
+    "hint": "可选，附加给模型的风格要求，例如：温柔一点，语速偏慢",
+    "default": ""
+  },
   "speed": {
     "type": "float",
     "description": "语速",
