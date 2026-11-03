@@ -1,7 +1,8 @@
 const bridge = window.AstrBotPluginView || window.AstrBotPluginPage;
 
-const GIFT_URL = "https://breezeblue.ai/zh/app/subscription?gift=BREEZEBLUE&code=GH3HVA";
-const KEY_URL = "https://breezeblue.ai/zh/app/developer/api-keys?code=GH3HVA";
+const UTM = "utm_source=deepseek&utm_medium=plugin&utm_campaign=deepseek_harness";
+const GIFT_URL = `https://breezeblue.ai/zh/app/subscription?gift=BREEZEBLUE&code=GH3HVA&${UTM}&utm_content=astrbot_subscription`;
+const KEY_URL = `https://breezeblue.ai/zh/app/developer/api-keys?code=GH3HVA&${UTM}&utm_content=astrbot_api_keys`;
 
 const $ = (id) => document.getElementById(id);
 const state = {
@@ -69,6 +70,19 @@ async function loadSettings() {
   renderSettings();
 }
 
+function updateProbabilityState() {
+  const smart = !!state.settings?.smartVoice;
+  const slider = $("voiceProbability");
+  if (!slider) return;
+  slider.disabled = smart;
+  const hint = $("probHint");
+  if (hint) {
+    hint.textContent = smart
+      ? "智能判断已开启，概率不生效（两者互斥）"
+      : "0 = 全部文字 · 100 = 全部语音";
+  }
+}
+
 function renderSettings() {
   const s = state.settings;
   if (!s) return;
@@ -80,8 +94,10 @@ function renderSettings() {
   $("getKey").classList.toggle("hidden", !!s.hasApiKey);
   $("search").disabled = !s.hasApiKey;
   $("search").placeholder = s.hasApiKey ? "搜索音色（名称或描述）" : "请先设置 API Key";
-  $("autoVoice").checked = !!s.autoVoice;
+  $("voiceProbability").value = String(s.voiceProbability ?? 100);
+  $("probVal").textContent = `${Number(s.voiceProbability ?? 100)}%`;
   $("smartVoice").checked = !!s.smartVoice;
+  updateProbabilityState();
   $("speed").value = String(s.speed ?? 1);
   $("speedVal").textContent = `${Number(s.speed ?? 1).toFixed(2)}×`;
 
@@ -358,18 +374,21 @@ function bind() {
     }
   });
 
-  $("autoVoice").addEventListener("change", async (event) => {
+  $("voiceProbability").addEventListener("input", (event) => {
+    $("probVal").textContent = `${Number(event.target.value)}%`;
+  });
+  $("voiceProbability").addEventListener("change", async (event) => {
     try {
-      await saveSettings({ autoVoice: event.target.checked }, event.target.checked ? "已开启语音回复" : "已关闭语音回复");
+      await saveSettings({ voiceProbability: Number(event.target.value) }, "语音概率已保存");
     } catch (error) {
       toast(error.message);
-      event.target.checked = !event.target.checked;
     }
   });
 
   $("smartVoice").addEventListener("change", async (event) => {
     try {
       await saveSettings({ smartVoice: event.target.checked }, event.target.checked ? "已开启智能判断" : "已关闭智能判断");
+      updateProbabilityState();
     } catch (error) {
       toast(error.message);
       event.target.checked = !event.target.checked;

@@ -2,7 +2,7 @@
 
 把机器人的 AI 文字回复自动转成语音消息，底层调用 [Breeze TTS](https://breezeblue.ai)。
 
-- **全局语音回复开关，默认开启**：开启后所有回复都用语音发；
+- **语音回复概率（0-100）**：0 = 全部文字，100 = 全部语音，中间按概率随机；
 - 音色、语速、语言、单条字数上限都可在面板里配；
 - 超过字数上限、命令回复、平台不支持语音时自动保持文字；
 - 附带余额查询和音色搜索指令。
@@ -27,11 +27,11 @@ git clone https://github.com/hangdingding/astrbot_plugin_breeze_tts
 
 ## 可视化页面
 
-插件详情页里有 **Breeze 语音设置** 视图（`views/panel`）：API Key、余额、全局语音回复开关、语速、音色搜索与试听、设计音色、福利与邀请入口都在这一页里，和 DSH 版面板一致。
+插件详情页里有 **Breeze 语音设置** 视图（`views/panel`）：API Key、余额、语音回复概率、智能判断开关、语速、音色搜索与试听、设计音色、福利与邀请入口都在这一页里，和 DSH 版面板一致。
 
 后端 API 由 `main.py` 的 `register_web_api` 提供（`/astrbot_plugin_breeze_tts/...`），页面通过 `window.AstrBotPluginView` bridge 调用，无需额外端口。
 
-## 智能判断（默认开）
+## 智能判断（与概率互斥）
 
 开启后，每条回复发出前会先问一次当前聊天模型（DeepSeek）：这条回复适合语音还是文字？
 
@@ -40,7 +40,9 @@ git clone https://github.com/hangdingding/astrbot_plugin_breeze_tts
   - `instructions`：发音指导（情绪、语速、重音），作为 Breeze 的 `instructions` 参数；
 - 代码、表格、链接、步骤教程、长文 → **文字**，保持原样。
 
-模型返回 JSON，插件解析后调用 Breeze 合成。判断失败时降级为“直接转语音”。想退回“全部转语音”，把「智能判断」关掉即可。
+模型返回 JSON，插件解析后调用 Breeze 合成。判断失败时降级为“直接转语音”。
+
+「智能判断」和「语音回复概率」互斥：开启智能判断后，概率不生效；关掉它，按概率随机决定文字还是语音。
 
 ## 让模型知道"我能说话"
 
@@ -60,8 +62,8 @@ git clone https://github.com/hangdingding/astrbot_plugin_breeze_tts
 |---|---|
 | `api_key` | Breeze API Key，`brz_` 开头（密文显示） |
 | `voice_id` | 音色 ID，`voc_` 开头 |
-| `auto_voice` | **全局语音回复，默认开** |
-| `smart_voice` | 智能判断文字/语音，默认开 |
+| `voice_probability` | **语音回复概率 0-100，默认 100** |
+| `smart_voice` | 智能判断文字/语音，默认开（与概率互斥） |
 | `style_prompt` | 附加发音风格（可选） |
 | `speed` | 语速 0.5–2.0 |
 | `language_code` | 语言，默认 `zh` |
@@ -77,7 +79,7 @@ git clone https://github.com/hangdingding/astrbot_plugin_breeze_tts
 | 指令 | 说明 |
 |---|---|
 | `/breeze status` | 查看开关、音色、字数上限 |
-| `/breeze on` / `/breeze off` | 开关全局语音回复（管理员，会写回配置） |
+| `/breeze on` / `/breeze off` | 语音概率切到 100% / 0%（管理员，会写回配置） |
 | `/breeze balance` | 查询账户积分余额 |
 | `/breeze voices 女声` | 按关键词搜索音色 |
 | `/breeze test 你好` | 用当前音色试听一句 |

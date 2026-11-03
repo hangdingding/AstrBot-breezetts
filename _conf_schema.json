@@ -12,16 +12,16 @@
     "hint": "voc_ 开头；可用 /breeze voices 关键词 搜索",
     "default": "voc_u3nxkd5578wc"
   },
-  "auto_voice": {
-    "type": "bool",
-    "description": "全局语音回复",
-    "hint": "开启后，所有 AI 文字回复会自动转成语音发送",
-    "default": true
+  "voice_probability": {
+    "type": "int",
+    "description": "语音回复概率",
+    "hint": "0 = 全部文字，100 = 全部语音；开启智能判断后不生效",
+    "default": 100
   },
   "smart_voice": {
     "type": "bool",
     "description": "智能判断文字/语音",
-    "hint": "调用当前模型判断：适合语音才转语音，并生成发音指导",
+    "hint": "调用当前模型逐条判断：适合语音才转语音，并生成发音指导；与概率互斥",
     "default": true
   },
   "style_prompt": {

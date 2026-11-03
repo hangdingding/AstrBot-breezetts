@@ -32,21 +32,19 @@
             <button id="getKey" class="linkBtn strong">获取 API Key →</button>
           </div>
 
-          <div class="switchRow">
-            <div>
-              <div class="switchTitle">全局语音回复</div>
-              <div class="hint">所有 AI 回复自动转成语音</div>
+          <div class="field">
+            <div class="fieldHead">
+              <span class="label">语音回复概率</span>
+              <span class="hint" id="probVal">100%</span>
             </div>
-            <label class="switch">
-              <input id="autoVoice" type="checkbox" />
-              <i></i>
-            </label>
+            <input id="voiceProbability" type="range" min="0" max="100" step="5" />
+            <p class="hint" id="probHint">0 = 全部文字 · 100 = 全部语音</p>
           </div>
 
           <div class="switchRow">
             <div>
               <div class="switchTitle">智能判断</div>
-              <div class="hint">让模型决定文字还是语音，并生成朗读稿</div>
+              <div class="hint">让模型逐条决定文字还是语音；开启后概率不生效</div>
             </div>
             <label class="switch">
               <input id="smartVoice" type="checkbox" />

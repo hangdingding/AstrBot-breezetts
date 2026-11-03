@@ -1,12 +1,14 @@
 """Breeze TTS for AstrBot — turn AI replies into voice messages.
 
-全局开关 `auto_voice`（默认开）开启后，插件在消息结果装饰阶段把纯文本回复
-替换成一条语音（Record）。配置面板由 AstrBot 根据 `_conf_schema.json` 自动生成。
+`voice_probability`（0-100）控制语音回复的概率：0 全部文字，100 全部语音。
+开启 `smart_voice` 时改由模型逐条判断，此时概率不生效（两者互斥）。
+配置面板由 AstrBot 根据 `_conf_schema.json` 自动生成。
 """
 
 from __future__ import annotations
 
 import json
+import random
 import re
 import time
 import uuid
@@ -65,6 +67,13 @@ class BreezeTTSPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig | None = None):
         super().__init__(context)
         self.config = config or {}
+        # 旧版 auto_voice 布尔值迁移为概率
+        try:
+            if "voice_probability" not in self.config:
+                legacy = self.config.get("auto_voice", True)
+                self.config["voice_probability"] = 100 if legacy else 0
+        except Exception:
+            pass
         self.session: aiohttp.ClientSession | None = None
         self.temp_dir = Path("data") / "temp" / "breeze_tts"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
@@ -286,7 +295,7 @@ class BreezeTTSPlugin(Star):
             "apiKeyHint": self._mask(),
             "voiceId": str(self._cfg("voice_id", "")),
             "voiceName": voice_name,
-            "autoVoice": bool(self._cfg("auto_voice", True)),
+            "voiceProbability": self._voice_probability(),
             "smartVoice": bool(self._cfg("smart_voice", True)),
             "stylePrompt": str(self._cfg("style_prompt", "") or ""),
             "speed": float(self._cfg("speed", 1.0) or 1.0),
@@ -335,11 +344,15 @@ class BreezeTTSPlugin(Star):
                 return error_response("音色 ID 不能为空")
             self.config["voice_id"] = voice_id.strip()
 
-        auto_voice = payload.get("autoVoice")
-        if auto_voice is not None:
-            if not isinstance(auto_voice, bool):
-                return error_response("autoVoice 必须是布尔值")
-            self.config["auto_voice"] = auto_voice
+        probability = payload.get("voiceProbability")
+        if probability is not None:
+            try:
+                value = int(probability)
+            except (TypeError, ValueError):
+                return error_response("语音概率必须是 0-100 的整数")
+            if not 0 <= value <= 100:
+                return error_response("语音概率必须在 0-100 之间")
+            self.config["voice_probability"] = value
 
         smart_voice = payload.get("smartVoice")
         if smart_voice is not None:
@@ -509,14 +522,24 @@ class BreezeTTSPlugin(Star):
         self, event: AstrMessageEvent, req: ProviderRequest
     ):
         """告诉模型它可以用语音说话，避免它去调用 say/python 生成音频。"""
-        if not bool(self._cfg("auto_voice", True)):
+        if not self._voice_enabled():
             return
         req.system_prompt = f"{req.system_prompt or ''}\n\n{VOICE_HINT}"
 
     # ---------- 语音回复 ----------
 
+    def _voice_probability(self) -> int:
+        try:
+            value = int(self._cfg("voice_probability", 100) or 0)
+        except (TypeError, ValueError):
+            value = 0
+        return max(0, min(100, value))
+
+    def _voice_enabled(self) -> bool:
+        return bool(self._cfg("smart_voice", True)) or self._voice_probability() > 0
+
     def _allowed_here(self, event: AstrMessageEvent) -> bool:
-        if not bool(self._cfg("auto_voice", True)):
+        if not self._voice_enabled():
             return False
         platform = ""
         try:
@@ -561,7 +584,16 @@ class BreezeTTSPlugin(Star):
 
             script = text
             instructions = ""
-            if bool(self._cfg("smart_voice", True)):
+            smart = bool(self._cfg("smart_voice", True))
+            if not smart:
+                probability = self._voice_probability()
+                if probability <= 0:
+                    logger.info("Breeze TTS: 概率为 0，保持文字")
+                    return
+                if probability < 100 and random.random() * 100 >= probability:
+                    logger.info("Breeze TTS: 概率未命中（%s%%）", probability)
+                    return
+            if smart:
                 try:
                     decision = await self._direct(event, text)
                     if str(decision.get("mode", "")).lower() != "voice":
@@ -615,29 +647,29 @@ class BreezeTTSPlugin(Star):
     @breeze.command("status")
     async def breeze_status(self, event: AstrMessageEvent):
         """查看当前状态"""
-        enabled = "开" if bool(self._cfg("auto_voice", True)) else "关"
+        probability = self._voice_probability()
         smart = "开" if bool(self._cfg("smart_voice", True)) else "关"
         voice = self._cfg("voice_id", "未配置")
-        limit = self._cfg("max_chars", 200)
+        limit = int(self._cfg("max_chars", 1000) or 1000)
         yield event.plain_result(
-            f"Breeze TTS\n语音回复：{enabled}\n智能判断：{smart}\n音色：{voice}\n单条上限：{limit} 字"
+            f"Breeze TTS\n语音概率：{probability}%\n智能判断：{smart}\n音色：{voice}\n单条上限：{limit} 字"
         )
 
     @breeze.command("on")
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def breeze_on(self, event: AstrMessageEvent):
         """开启全局语音回复"""
-        self.config["auto_voice"] = True
+        self.config["voice_probability"] = 100
         self.config.save_config()
-        yield event.plain_result("已开启全局语音回复。")
+        yield event.plain_result("已开启：语音概率 100%。")
 
     @breeze.command("off")
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def breeze_off(self, event: AstrMessageEvent):
         """关闭全局语音回复"""
-        self.config["auto_voice"] = False
+        self.config["voice_probability"] = 0
         self.config.save_config()
-        yield event.plain_result("已关闭全局语音回复。")
+        yield event.plain_result("已关闭：语音概率 0%，全部发文字。")
 
     @breeze.command("balance")
     async def breeze_balance(self, event: AstrMessageEvent):
