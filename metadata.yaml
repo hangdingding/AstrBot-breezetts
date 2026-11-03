@@ -2,7 +2,7 @@ name: astrbot_plugin_breeze_tts
 display_name: Breeze 语音回复
 short_desc: 用 Breeze TTS 把 AI 回复自动转成语音
 desc: 接入 Breeze TTS，把机器人的文字回复自动转成语音消息。支持全局开关（默认开启）、音色与语速、单条字数上限、群白名单，以及余额查询和音色搜索指令。
-version: 1.2.1
+version: 1.2.2
 author: Breeze Blue
 repo: https://github.com/hangdingding/AstrBot-breezetts
 astrbot_version: '>=4.11.0'

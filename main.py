@@ -157,6 +157,30 @@ class BreezeTTSPlugin(Star):
         self._cleanup()
         return out.resolve()
 
+    @staticmethod
+    def _make_record(path: Path, text: str):
+        """Build a Record with a file:// URI and a text caption fallback.
+
+        Old AstrBot builds and some adapters cannot resolve a bare filesystem
+        path on Record, and the message ends up as base64 text. fromFileSystem
+        sets both ``file`` (URI) and ``path``; ``text`` is used as a caption
+        when the adapter has to fall back to text.
+        """
+        record = None
+        factory = getattr(Comp.Record, "fromFileSystem", None)
+        if callable(factory):
+            try:
+                record = factory(str(path))
+            except Exception:
+                record = None
+        if record is None:
+            record = Comp.Record(file=path.as_uri(), path=str(path))
+        try:
+            record.text = text
+        except Exception:
+            pass
+        return record
+
     async def get_balance(self) -> float:
         api_key = str(self._cfg("api_key", "")).strip()
         if not api_key:
@@ -569,14 +593,14 @@ class BreezeTTSPlugin(Star):
             )
 
             if bool(self._cfg("keep_text", False)):
-                chain.append(Comp.Record(file=str(path)))
+                chain.append(self._make_record(path, text))
             else:
                 kept = [
                     item
                     for item in chain
                     if not isinstance(item, (Comp.Plain, Comp.At))
                 ]
-                kept.append(Comp.Record(file=str(path)))
+                kept.append(self._make_record(path, text))
                 result.chain = kept
         except Exception as error:  # 不让单条失败影响整条消息
             logger.error("Breeze TTS 转换失败: %s", error)
@@ -646,6 +670,6 @@ class BreezeTTSPlugin(Star):
         sample = text.strip() or "你好，我是 Breeze 语音，很高兴认识你。"
         try:
             path = await self.synthesize(sample[:200])
-            yield event.chain_result([Comp.Record(file=str(path))])
+            yield event.chain_result([self._make_record(path, script)])
         except Exception as error:
             yield event.plain_result(f"合成失败：{error}")
